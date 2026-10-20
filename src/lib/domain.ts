@@ -12,8 +12,8 @@ export function normalizeSlug(input: string): string {
 
 export function validateSlug(input: string): string {
   const slug = normalizeSlug(input);
-  if (slug.length < 3 || slug.length > 48 || !SLUG_PATTERN.test(slug)) {
-    throw new Error("Use 3–48 lowercase letters, numbers, or single hyphens.");
+  if (slug.length < 1 || slug.length > 48 || !SLUG_PATTERN.test(slug)) {
+    throw new Error("Use 1–48 lowercase letters, numbers, or single hyphens.");
   }
   if (RESERVED_SLUGS.has(slug)) throw new Error("That name is reserved.");
   return slug;

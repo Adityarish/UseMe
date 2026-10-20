@@ -34,7 +34,7 @@ export function NamePicker() {
   }
 
   const message = {
-    idle: "Use 3–48 letters, numbers, and hyphens.",
+    idle: "Use 1–48 letters, numbers, and hyphens.",
     checking: "Checking…",
     available: "Available — make it yours.",
     exists: "This link exists — open it.",
