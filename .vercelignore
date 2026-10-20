@@ -1,0 +1,11 @@
+# Keep local secrets and development-only state out of CLI deployment uploads.
+node_modules/
+.next/
+out/
+coverage/
+.env
+.env.*
+!.env.example
+!.env.vercel.example
+.local-storage/
+tsconfig.tsbuildinfo

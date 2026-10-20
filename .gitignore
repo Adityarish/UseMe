@@ -1,0 +1,16 @@
+node_modules/
+.next/
+out/
+coverage/
+.env
+.env.local
+.env.vercel.example
+.env.*.local
+!.env.example
+.DS_Store
+*.log
+*.tsbuildinfo
+.local-storage/
+drizzle/meta/
+__pycache__/
+*.py[cod]

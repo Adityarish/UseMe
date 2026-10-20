@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: useme
+      POSTGRES_PASSWORD: useme
+      POSTGRES_DB: useme
+    ports:
+      - "5432:5432"
+    volumes:
+      - useme-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U useme -d useme"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  useme-postgres:
