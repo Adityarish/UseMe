@@ -3,7 +3,12 @@ import { db } from "@/db/client";
 import { rateLimits } from "@/db/schema";
 import { ApiError } from "./http";
 
-export async function rateLimit(key: string, limit: number, windowSeconds: number): Promise<void> {
+export async function rateLimit(
+  key: string,
+  limit: number,
+  windowSeconds: number,
+  message = "Too many requests. Please wait and try again.",
+): Promise<void> {
   const epoch = Math.floor(Date.now() / 1000);
   const bucketEpoch = epoch - (epoch % windowSeconds);
   const bucket = new Date(bucketEpoch * 1000);
@@ -18,6 +23,6 @@ export async function rateLimit(key: string, limit: number, windowSeconds: numbe
     .returning({ hits: rateLimits.hits });
 
   if (Number(result?.hits ?? 1) > limit) {
-    throw new ApiError(429, "Too many requests. Please wait and try again.", "RATE_LIMITED");
+    throw new ApiError(429, message, "RATE_LIMITED");
   }
 }

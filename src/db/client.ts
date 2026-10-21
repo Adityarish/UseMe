@@ -9,7 +9,9 @@ const isManagedDatabase = /(?:supabase\.com|supabase\.co|pooler\.supabase)/.test
 
 export const sqlClient = globalForDb.sqlClient ?? postgres(databaseUrl, {
   max: process.env.NODE_ENV === "production" ? 1 : 3,
-  prepare: process.env.NODE_ENV !== "production",
+  // Supabase's transaction pooler does not support session-scoped prepared
+  // statements. Disable them for every Supabase endpoint, including local dev.
+  prepare: !isManagedDatabase && process.env.NODE_ENV !== "production",
   ssl: isManagedDatabase ? "require" : undefined,
   idle_timeout: 20,
   connect_timeout: 10,

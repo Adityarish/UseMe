@@ -11,10 +11,16 @@ try {
   const authMigration = await readFile(path.join(process.cwd(), "drizzle/0001_supabase_auth.sql"), "utf8");
   const reusableSlugsMigration = await readFile(path.join(process.cwd(), "drizzle/0002_reusable_slugs.sql"), "utf8");
   const activateTextClipsMigration = await readFile(path.join(process.cwd(), "drizzle/0003_activate_text_clips.sql"), "utf8");
+  const enableRlsMigration = await readFile(path.join(process.cwd(), "drizzle/0004_enable_rls.sql"), "utf8");
+  const activityLogsMigration = await readFile(path.join(process.cwd(), "drizzle/0005_activity_logs.sql"), "utf8");
+  const adminReportsMigration = await readFile(path.join(process.cwd(), "drizzle/0006_admin_reports.sql"), "utf8");
   let applied = false;
   let authApplied = false;
   let reusableSlugsApplied = false;
   let activatedTextClips = 0;
+  let rlsApplied = false;
+  let activityLogsApplied = false;
+  let adminReportsApplied = false;
   await sql.begin(async (transaction) => {
     await transaction`select pg_advisory_xact_lock(hashtext('useme-initial-migration'))`;
     const [state] = await transaction<{
@@ -74,12 +80,60 @@ try {
     const activated = await transaction.unsafe<{ id: string }[]>(activateTextClipsMigration);
     activatedTextClips = activated.length;
   });
+  await sql.begin(async (transaction) => {
+    await transaction`select pg_advisory_xact_lock(hashtext('useme-enable-rls-migration'))`;
+    const [state] = await transaction<{ disabled_count: number }[]>`
+      select count(*)::int as disabled_count
+      from pg_catalog.pg_class as tables
+      join pg_catalog.pg_namespace as schemas on schemas.oid = tables.relnamespace
+      where schemas.nspname = 'public'
+        and tables.relname in (
+          'profiles',
+          'clips',
+          'attachments',
+          'one_time_sessions',
+          'upload_sessions',
+          'rate_limits',
+          'abuse_reports'
+        )
+        and not tables.relrowsecurity
+    `;
+    if (!state?.disabled_count) return;
+    await transaction.unsafe(enableRlsMigration);
+    rlsApplied = true;
+  });
+  await sql.begin(async (transaction) => {
+    await transaction`select pg_advisory_xact_lock(hashtext('useme-activity-logs-migration'))`;
+    const [state] = await transaction<{ activity_logs: string | null }[]>`
+      select to_regclass('public.activity_logs')::text as activity_logs
+    `;
+    if (state?.activity_logs) return;
+    await transaction.unsafe(activityLogsMigration);
+    activityLogsApplied = true;
+  });
+  await sql.begin(async (transaction) => {
+    await transaction`select pg_advisory_xact_lock(hashtext('useme-admin-reports-migration'))`;
+    const columns = await transaction<{ column_name: string }[]>`
+      select column_name
+      from information_schema.columns
+      where table_schema = 'public'
+        and table_name = 'abuse_reports'
+        and column_name in ('status', 'reviewed_at', 'reviewed_by_user_id')
+    `;
+    if (columns.length === 3) return;
+    if (columns.length > 0) throw new Error("Abuse report moderation columns are partially initialized");
+    await transaction.unsafe(adminReportsMigration);
+    adminReportsApplied = true;
+  });
   console.log(applied ? "Applied drizzle/0000_initial.sql" : "Database is already initialized");
   console.log(authApplied ? "Applied drizzle/0001_supabase_auth.sql" : "Supabase auth migration is already applied");
   console.log(reusableSlugsApplied ? "Applied drizzle/0002_reusable_slugs.sql" : "Reusable-slug migration is already applied");
   console.log(activatedTextClips
     ? `Activated ${activatedTextClips} existing text clip${activatedTextClips === 1 ? "" : "s"}`
     : "Existing text clips are already active");
+  console.log(rlsApplied ? "Applied drizzle/0004_enable_rls.sql" : "Row Level Security is already enabled");
+  console.log(activityLogsApplied ? "Applied drizzle/0005_activity_logs.sql" : "Activity logs migration is already applied");
+  console.log(adminReportsApplied ? "Applied drizzle/0006_admin_reports.sql" : "Admin reports migration is already applied");
 } finally {
   await sql.end();
 }

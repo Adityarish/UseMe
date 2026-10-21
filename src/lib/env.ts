@@ -15,6 +15,7 @@ const schema = z.object({
   NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
   NEXT_PUBLIC_SUPABASE_URL: optionalUrl,
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: optionalString,
+  ADMIN_EMAILS: z.string().default(""),
   DATABASE_URL: z.string().min(1),
   APP_SECRET: z.string().min(32),
   STORAGE_PROVIDER: z.enum(["local", "google-drive"]).default("local"),

@@ -1,0 +1,2 @@
+1. use the postgress from supabase only 
+2. Deploy on vercel and get all the .env file first and then proceed

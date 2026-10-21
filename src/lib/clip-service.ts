@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gt, ilike, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
-import { attachments, clips, oneTimeSessions, profiles, uploadSessions } from "@/db/schema";
+import { activityLogs, attachments, clips, oneTimeSessions, profiles, uploadSessions } from "@/db/schema";
 import { db } from "@/db/client";
 import { env } from "./env";
 import { ApiError } from "./http";
@@ -100,6 +100,15 @@ export async function createClip(payload: unknown, identity: Identity) {
         // object is safely stored and marked READY.
         status: Boolean(input.text.trim()) || input.files.length === 0 ? "ACTIVE" : "UPLOADING",
       }).returning({ id: clips.id, slug: clips.slug });
+
+      if (identity) {
+        await tx.insert(activityLogs).values({
+          userId: identity.userId,
+          clipId: clip.id,
+          action: "CREATED",
+          slug: clip.slug,
+        });
+      }
 
       const createdAttachments = input.files.length
         ? await tx.insert(attachments).values(input.files.map((file) => ({
@@ -278,15 +287,20 @@ export async function editClip(slug: string, payload: unknown, identity: Identit
   const input = editClipSchema.parse(payload);
   const clip = await clipRecord(slug);
   await authorizeEdit(clip, identity, cookieBag);
-  const updated = await db.update(clips).set({
-    textContent: input.text || null,
-    language: input.language,
-    updatedAt: new Date(),
-    version: sql`${clips.version} + 1`,
-  }).where(and(eq(clips.id, clip.id), eq(clips.version, input.version), eq(clips.status, "ACTIVE")))
-    .returning({ version: clips.version });
-  if (!updated.length) throw new ApiError(409, "This clip changed in another session. Refresh before saving again.", "VERSION_CONFLICT");
-  return updated[0];
+  return db.transaction(async (tx) => {
+    const updated = await tx.update(clips).set({
+      textContent: input.text || null,
+      language: input.language,
+      updatedAt: new Date(),
+      version: sql`${clips.version} + 1`,
+    }).where(and(eq(clips.id, clip.id), eq(clips.version, input.version), eq(clips.status, "ACTIVE")))
+      .returning({ version: clips.version });
+    if (!updated.length) throw new ApiError(409, "This clip changed in another session. Refresh before saving again.", "VERSION_CONFLICT");
+    if (identity?.userId === clip.ownerUserId) {
+      await tx.insert(activityLogs).values({ userId: identity.userId, clipId: clip.id, action: "UPDATED", slug: clip.slug });
+    }
+    return updated[0];
+  });
 }
 
 export async function startEditUpload(slug: string, payload: unknown, identity: Identity, cookieBag: CookieBag) {
@@ -317,6 +331,15 @@ export async function startEditUpload(slug: string, payload: unknown, identity: 
       clipId: clip.id, tokenHash: tokenHash(rawToken), reservedBytes: newBytes,
       purpose: "EDIT", baseVersion: manifest.version, expiresAt,
     }).returning({ id: uploadSessions.id });
+    if (identity?.userId === clip.ownerUserId) {
+      await tx.insert(activityLogs).values({
+        userId: identity.userId,
+        clipId: clip.id,
+        action: "FILES_ADDED",
+        slug: clip.slug,
+        detail: `${manifest.files.length} file${manifest.files.length === 1 ? "" : "s"} added`,
+      });
+    }
     return { attachments: created, uploadSession: { id: session.id, token: rawToken, expiresAt }, version: advanced[0].version };
   });
 }
@@ -333,6 +356,9 @@ export async function removeAttachment(slug: string, attachmentId: string, versi
       eq(attachments.id, attachmentId), eq(attachments.clipId, clip.id), eq(attachments.status, "READY"),
     )).returning({ id: attachments.id, objectId: attachments.storageObjectId });
     if (!removed.length) throw new ApiError(404, "Attachment not found.", "FILE_NOT_FOUND");
+    if (identity?.userId === clip.ownerUserId) {
+      await tx.insert(activityLogs).values({ userId: identity.userId, clipId: clip.id, action: "FILE_REMOVED", slug: clip.slug });
+    }
     return { version: advanced[0].version, file: removed[0] };
   });
   if (!result.file.objectId) return { version: result.version, cleanupPending: false };
@@ -350,14 +376,19 @@ export async function removeAttachment(slug: string, attachmentId: string, versi
 
 export async function ownedClips(userId: string, query = "", sort: "newest" | "oldest" = "newest", page = 1) {
   const pageSize = 20;
-  const where = query ? and(eq(clips.ownerUserId, userId), ilike(clips.slug, `%${query}%`)) : eq(clips.ownerUserId, userId);
+  const live = and(eq(clips.ownerUserId, userId), inArray(clips.status, ["ACTIVE", "UPLOADING"]));
+  const where = query ? and(live, ilike(clips.slug, `%${query}%`)) : live;
   const items = await db.select({
     id: clips.id, slug: clips.slug, expiryMode: clips.expiryMode, expiresAt: clips.expiresAt,
     consumedAt: clips.oneTimeConsumedAt, status: clips.status, createdAt: clips.createdAt, updatedAt: clips.updatedAt,
   }).from(clips).where(where).orderBy(sort === "oldest" ? asc(clips.createdAt) : desc(clips.createdAt)).limit(pageSize).offset((page - 1) * pageSize);
   const countRows = await db.select({ count: sql<number>`count(*)::int` }).from(clips).where(where);
   const bytesRows = await db.select({ bytes: sql<number>`coalesce(sum(${attachments.sizeBytes}), 0)::bigint` })
-    .from(attachments).innerJoin(clips, eq(clips.id, attachments.clipId)).where(and(eq(clips.ownerUserId, userId), eq(attachments.status, "READY")));
+    .from(attachments).innerJoin(clips, eq(clips.id, attachments.clipId)).where(and(
+      eq(clips.ownerUserId, userId),
+      inArray(clips.status, ["ACTIVE", "UPLOADING"]),
+      eq(attachments.status, "READY"),
+    ));
   return { items, total: Number(countRows[0]?.count ?? 0), bytes: Number(bytesRows[0]?.bytes ?? 0), page, pageSize };
 }
 
@@ -374,6 +405,7 @@ export async function deleteOwnedClip(slug: string, identity: NonNullable<Identi
       .where(and(eq(clips.id, clip.id), eq(clips.ownerUserId, identity.userId), inArray(clips.status, ["ACTIVE", "UPLOADING"])))
       .returning({ id: clips.id });
     if (!marked.length) throw new ApiError(409, "This clip is no longer active.", "DELETE_CONFLICT");
+    await tx.insert(activityLogs).values({ userId: identity.userId, clipId: clip.id, action: "DELETED", slug: clip.slug });
     return tx.select().from(attachments).where(and(eq(attachments.clipId, clip.id), inArray(attachments.status, ["READY", "PENDING", "DELETE_FAILED"])));
   });
   const { storage } = await import("./storage");

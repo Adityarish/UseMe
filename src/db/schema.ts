@@ -19,6 +19,8 @@ export const clipStatus = pgEnum("clip_status", ["UPLOADING", "ACTIVE", "DELETED
 export const attachmentStatus = pgEnum("attachment_status", ["PENDING", "READY", "QUARANTINED", "DELETED", "DELETE_FAILED"]);
 export const uploadStatus = pgEnum("upload_status", ["OPEN", "COMPLETE", "EXPIRED", "FAILED"]);
 export const uploadPurpose = pgEnum("upload_purpose", ["CREATE", "EDIT"]);
+export const activityAction = pgEnum("activity_action", ["CREATED", "UPDATED", "DELETED", "FILES_ADDED", "FILE_REMOVED"]);
+export const reportStatus = pgEnum("report_status", ["OPEN", "REVIEWED", "DISMISSED", "ACTIONED"]);
 
 export const profiles = pgTable("profiles", {
   userId: text("user_id").primaryKey(),
@@ -123,7 +125,27 @@ export const abuseReports = pgTable(
     clipId: uuid("clip_id").notNull().references(() => clips.id, { onDelete: "cascade" }),
     reason: text("reason").notNull(),
     reporterFingerprint: text("reporter_fingerprint").notNull(),
+    status: reportStatus("status").default("OPEN").notNull(),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    reviewedByUserId: text("reviewed_by_user_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [index("abuse_reports_clip_idx").on(table.clipId, table.createdAt)],
+  (table) => [
+    index("abuse_reports_clip_idx").on(table.clipId, table.createdAt),
+    index("abuse_reports_status_created_idx").on(table.status, table.createdAt, table.id),
+  ],
+);
+
+export const activityLogs = pgTable(
+  "activity_logs",
+  {
+    id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+    userId: text("user_id").notNull().references(() => profiles.userId, { onDelete: "cascade" }),
+    clipId: uuid("clip_id").references(() => clips.id, { onDelete: "set null" }),
+    action: activityAction("action").notNull(),
+    slug: text("slug").notNull(),
+    detail: text("detail"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("activity_logs_user_created_idx").on(table.userId, table.createdAt, table.id)],
 );
