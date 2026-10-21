@@ -112,3 +112,16 @@ export async function uploadAttachment(options: UploadOptions): Promise<void> {
   if (prepared.mode === "direct") return directUpload(prepared, options);
   return proxyUpload(options);
 }
+
+export async function uploadAttachments(options: UploadOptions[], concurrency = 3): Promise<void> {
+  let next = 0;
+  const workers = Array.from({ length: Math.min(options.length, Math.max(1, concurrency)) }, async () => {
+    while (next < options.length) {
+      const index = next++;
+      await uploadAttachment(options[index]);
+    }
+  });
+  const results = await Promise.allSettled(workers);
+  const failed = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
+  if (failed) throw failed.reason;
+}

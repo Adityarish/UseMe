@@ -14,3 +14,4 @@ coverage/
 drizzle/meta/
 __pycache__/
 *.py[cod]
+todos.txt

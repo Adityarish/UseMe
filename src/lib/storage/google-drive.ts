@@ -10,6 +10,7 @@ import type {
 } from "./types";
 import { env } from "../env";
 import { googleDriveFolderId, storageFolderFor } from "./shard";
+import { sqlClient } from "@/db/client";
 
 type DriveFile = { id: string };
 type DriveFileMetadata = DriveFile & {
@@ -107,8 +108,14 @@ export class GoogleDriveStorageAdapter implements StorageAdapter {
     const config = env();
     const token = await this.accessToken();
     const rootFolderId = googleDriveFolderId(config.GOOGLE_DRIVE_ROOT_FOLDER_ID!);
-    const storageFolder = await this.ensureFolder(storageFolderFor(input.clipId), rootFolderId, token);
-    const clipFolder = await this.ensureFolder(input.clipId, storageFolder, token);
+    // Drive has no unique-folder constraint. Serialize the lookup/create sequence
+    // per clip so concurrent file preparations (including across Vercel instances)
+    // cannot create duplicate clip folders.
+    const clipFolder = await sqlClient.begin(async (transaction) => {
+      await transaction`select pg_advisory_xact_lock(hashtext(${`useme-drive-folder:${input.clipId}`}))`;
+      const storageFolder = await this.ensureFolder(storageFolderFor(input.clipId), rootFolderId, token);
+      return this.ensureFolder(input.clipId, storageFolder, token);
+    });
     const initiate = await retryableFetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true&fields=id", {
       method: "POST",
       headers: {

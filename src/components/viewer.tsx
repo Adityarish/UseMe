@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Check, Clipboard, Download, Eye, FilePlus2, KeyRound, Pencil, Save, X } from "lucide-react";
-import { uploadAttachment } from "@/lib/client-upload";
+import { uploadAttachments } from "@/lib/client-upload";
 import { ReportButton } from "./report-button";
 
 const CodeEditor = dynamic(() => import("./code-editor").then((module) => module.CodeEditor), { ssr: false });
@@ -99,13 +99,11 @@ export function Viewer({ access, clip }: { access: "PASSWORD" | "REVEAL" | "AUTH
         if (!reservationResponse.ok) throw new Error(reservation.error?.message ?? "Could not reserve attachment uploads.");
         nextVersion = reservation.version;
         setVersion(nextVersion);
-        for (let index = 0; index < newFiles.length; index += 1) {
-          await uploadAttachment({
+        await uploadAttachments(newFiles.map((file, index) => ({
             url: `/api/uploads/${reservation.uploadSession.id}/${reservation.attachments[index].id}`,
             token: reservation.uploadSession.token,
-            file: newFiles[index],
-          });
-        }
+            file,
+          })));
         const finalized = await fetch(`/api/uploads/${reservation.uploadSession.id}/finalize`, { method: "POST", headers: { "x-upload-token": reservation.uploadSession.token } });
         if (!finalized.ok) {
           const failure = await finalized.json().catch(() => null) as { error?: { message?: string } } | null;

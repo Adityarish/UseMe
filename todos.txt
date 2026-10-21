@@ -1,2 +1,4 @@
-1. use the postgress from supabase only 
-2. Deploy on vercel and get all the .env file first and then proceed
+
+
+1. as i can see tha that multiple files are uploading one by one, i wanted to upload all this parallelly
+2. 

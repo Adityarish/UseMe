@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import { FileUp, LockKeyhole, Trash2 } from "lucide-react";
-import { uploadAttachment } from "@/lib/client-upload";
+import { uploadAttachments } from "@/lib/client-upload";
 import { PasswordField } from "./password-field";
 
 const CodeEditor = dynamic(() => import("./code-editor").then((module) => module.CodeEditor), { ssr: false });
@@ -72,15 +72,12 @@ export function Creator({ initialSlug, maxClipBytes, maxFiles }: { initialSlug: 
       if (!response.ok) throw new Error(result.error?.message ?? "Could not create the clip.");
       createdSlug = result.clip.slug as string;
       if (result.uploadSession) {
-        for (let index = 0; index < files.length; index += 1) {
-          const file = files[index];
-          await uploadAttachment({
+        await uploadAttachments(files.map((file, index) => ({
             url: `/api/uploads/${result.uploadSession.id}/${result.attachments[index].id}`,
             token: result.uploadSession.token,
             file,
             onProgress: (percent) => setProgress((current) => ({ ...current, [file.name]: percent })),
-          });
-        }
+          })));
         const finalized = await fetch(`/api/uploads/${result.uploadSession.id}/finalize`, {
           method: "POST", headers: { "x-upload-token": result.uploadSession.token },
         });
