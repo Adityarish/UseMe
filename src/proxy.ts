@@ -18,12 +18,12 @@ export default async function proxy(request: NextRequest) {
         response = NextResponse.next({ request });
         cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
         Object.entries(headersToSet).forEach(([name, value]) => response.headers.set(name, value));
+        if (cookiesToSet.length > 0) response.headers.set("Cache-Control", "private, no-store");
       },
     },
   });
 
   await supabase.auth.getClaims();
-  response.headers.set("Cache-Control", "private, no-store");
   return response;
 }
 

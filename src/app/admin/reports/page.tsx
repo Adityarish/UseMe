@@ -2,13 +2,13 @@ import { redirect } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
 import { AdminReportList } from "@/components/admin-report-list";
 import { isAdmin } from "@/lib/admin";
-import { currentIdentity } from "@/lib/auth";
+import { currentIdentityFresh } from "@/lib/auth";
 import { recentReports } from "@/lib/moderation-service";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminReportsPage() {
-  const identity = await currentIdentity();
+  const identity = await currentIdentityFresh();
   if (!identity) redirect("/sign-in?redirect_url=/admin/reports");
   if (!isAdmin(identity)) redirect("/dashboard");
   const reports = await recentReports();

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/admin";
-import { currentIdentity } from "@/lib/auth";
+import { currentIdentityFresh } from "@/lib/auth";
 import { apiError, assertSameOrigin } from "@/lib/http";
 import { moderateReport } from "@/lib/moderation-service";
 
@@ -12,7 +12,7 @@ const idSchema = z.string().uuid();
 export async function PATCH(request: Request, context: Context) {
   try {
     assertSameOrigin(request);
-    const admin = requireAdmin(await currentIdentity());
+    const admin = requireAdmin(await currentIdentityFresh());
     const reportId = idSchema.parse((await context.params).reportId);
     const { action } = inputSchema.parse(await request.json());
     return NextResponse.json(await moderateReport(reportId, action, admin.userId));
