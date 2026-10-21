@@ -7,7 +7,7 @@ function safeNext(value: string | null): string {
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
-  const configuredOrigin = new URL(process.env.NEXT_PUBLIC_APP_URL ?? requestUrl.origin).origin;
+  const configuredOrigin = new URL(process.env.APP_URL ?? requestUrl.origin).origin;
   const next = safeNext(requestUrl.searchParams.get("next"));
 
   // PKCE cookies are host-specific. Start the flow on the configured origin so

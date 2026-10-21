@@ -275,7 +275,7 @@ def main() -> None:
     if not args.no_migrate:
         run_with_retries([npm, "run", "db:migrate"], env=child_env)
 
-    url = values.get("NEXT_PUBLIC_APP_URL", "http://localhost:3000")
+    url = values.get("APP_URL", "http://localhost:3000")
     if created:
         print("\nOptional: add Supabase URL and publishable key to .env.local to enable accounts.")
     print(f"\nStarting UseMe at {url} (press Ctrl+C to stop the web server).")

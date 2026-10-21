@@ -13,7 +13,7 @@ const shareImage = {
 };
 
 function getMetadataBase(): URL {
-  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  const configuredUrl = process.env.APP_URL?.trim();
   if (configuredUrl) return new URL(configuredUrl);
 
   const vercelHost = process.env.VERCEL_PROJECT_PRODUCTION_URL ?? process.env.VERCEL_URL;

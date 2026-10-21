@@ -54,7 +54,7 @@ Use different random values for `APP_SECRET` and `CLEANUP_SECRET`. Open `http://
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `NEXT_PUBLIC_APP_URL` | yes | Exact public origin used for same-origin mutation checks |
+| `APP_URL` | yes | Server-only canonical origin used for callbacks and same-origin mutation checks |
 | `DATABASE_URL` | yes | PostgreSQL connection string |
 | `APP_SECRET` | yes | At least 32 characters; signs short-lived access cookies |
 | `NEXT_PUBLIC_SUPABASE_URL` | for accounts | Supabase project URL |
@@ -150,7 +150,7 @@ Or call the protected route:
 
 ```bash
 curl -X POST -H "Authorization: Bearer $CLEANUP_SECRET" \
-  "$NEXT_PUBLIC_APP_URL/api/internal/cleanup"
+  "$APP_URL/api/internal/cleanup"
 ```
 
 Cleanup first makes expired content inaccessible, then deletes external objects. Failures become `DELETE_FAILED` and are retried on later runs. Expired and deleted names can be claimed again, so a reused URL intentionally points to the newly published content.
@@ -182,19 +182,19 @@ The database suite skips unless `TEST_DATABASE_URL` points to a migrated disposa
 ## Deployment guidance
 
 - Vercel Functions limit request and response bodies to 4.5 MB. Use `MAX_CLIP_BYTES=4000000` on Vercel. Supporting larger Google Drive files requires a separate direct/chunked upload design.
-- Set `NEXT_PUBLIC_APP_URL` to the exact HTTPS origin. Same-origin mutation checks intentionally reject a mismatch.
+- Set `APP_URL` to the exact HTTPS origin. Same-origin mutation checks intentionally reject a mismatch.
 - Use the Supabase transaction-pooler `DATABASE_URL` for Vercel and a direct or session-pooler `MIGRATION_DATABASE_URL` when running migrations.
 - Set `STORAGE_PROVIDER=google-drive`. Production intentionally fails instead of falling back to ephemeral local disk.
 - Run one cleanup schedule; concurrent runs are safe but waste Drive quota.
 - Place the service behind a WAF/CDN for network-level abuse controls, but do not cache `/api/*` or custom clip routes.
 - Keep the database password, Drive OAuth values, `APP_SECRET`, and cleanup secret in the host's secret manager.
 
-Copy the names from [.env.vercel.example](./.env.vercel.example) into **Vercel → Project Settings → Environment Variables**. Do not upload an environment file containing real secrets. Run `npm run db:migrate` against `MIGRATION_DATABASE_URL` before the first deployment, add the production `/auth/callback` URL to Supabase, and redeploy after changing any `NEXT_PUBLIC_*` variable.
+Copy the names from [.env.vercel.example](./.env.vercel.example) into **Vercel → Project Settings → Environment Variables**. Do not upload an environment file containing real secrets. Run `npm run db:migrate` against `MIGRATION_DATABASE_URL` before the first deployment, add the production `/auth/callback` URL to Supabase, and redeploy after changing environment variables.
 
 ## Troubleshooting
 
 - **A name stays unavailable after deletion:** intentional tombstoning prevents stale links from resolving to unrelated future content.
-- **`Invalid request origin`:** make `NEXT_PUBLIC_APP_URL` exactly match the browser origin, including scheme and port.
+- **`Invalid request origin`:** make `APP_URL` exactly match the browser origin, including scheme and port.
 - **Uploads stop before 50 MB:** check the reverse proxy and host request-body/time limits; streaming cannot bypass an upstream hard cap.
 - **Drive 401:** recreate the offline refresh token for the configured OAuth client; never send it to the browser.
 - **Drive 403/quota errors:** verify root-folder access, Shared Drive membership, API enablement, and account quota.

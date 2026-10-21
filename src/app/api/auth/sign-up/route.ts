@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     const next = requestedNext.startsWith("/") && !requestedNext.startsWith("//")
       ? requestedNext
       : "/dashboard";
-    const origin = new URL(env().NEXT_PUBLIC_APP_URL).origin;
+    const origin = new URL(env().APP_URL).origin;
     const callback = new URL("/auth/callback", origin);
     callback.searchParams.set("next", next);
 

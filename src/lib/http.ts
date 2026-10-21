@@ -23,7 +23,7 @@ export function apiError(error: unknown): NextResponse {
 export function assertSameOrigin(request: Request): void {
   const origin = request.headers.get("origin");
   if (!origin) return;
-  const allowed = new URL(env().NEXT_PUBLIC_APP_URL).origin;
+  const allowed = new URL(env().APP_URL).origin;
   if (origin !== allowed) throw new ApiError(403, "Invalid request origin.", "INVALID_ORIGIN");
 }
 

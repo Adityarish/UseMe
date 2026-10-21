@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   const next = requested.startsWith("/") && !requested.startsWith("//") ? requested : "/dashboard";
   const origin = process.env.NODE_ENV === "development"
     ? url.origin
-    : new URL(process.env.NEXT_PUBLIC_APP_URL ?? url.origin).origin;
+    : new URL(process.env.APP_URL ?? url.origin).origin;
   if (code) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(
