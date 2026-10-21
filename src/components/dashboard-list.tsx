@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Check, Clipboard, ExternalLink, Trash2 } from "lucide-react";
 
-type Item = { id: string; slug: string; expiryMode: string; expiresAt: string | null; consumedAt: string | null; status: string; createdAt: string };
+type Item = { id: string; slug: string; expiryMode: string; expiresAt: string | null; consumedAt: string | null; status: string; createdAt: string; deletionNoticeAt: string | null };
 
 export function DashboardList({ items }: { items: Item[] }) {
   const router = useRouter();
@@ -36,6 +36,6 @@ export function DashboardList({ items }: { items: Item[] }) {
       : status === "Uploading"
         ? "bg-blue-500/10 text-blue-700 dark:text-blue-400"
         : "bg-amber-500/10 text-amber-700 dark:text-amber-400";
-    return <li key={item.id} className="flex flex-col gap-4 p-5 transition hover:bg-black/[.02] dark:hover:bg-white/[.025] sm:flex-row sm:items-center"><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><Link href={`/${item.slug}`} className="truncate text-lg font-bold hover:text-accent">/{item.slug}</Link><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${statusTone}`}>{status}</span></div><p className="mt-1 text-xs text-ink/45">Created {new Date(item.createdAt).toLocaleDateString()}</p></div><div className="flex gap-2"><button className="button-secondary px-3" aria-label="Copy link" onClick={() => copyLink(item.slug)}>{copied === item.slug ? <Check className="size-4 text-emerald-600" /> : <Clipboard className="size-4" />}</button><Link className="button-secondary px-3" href={`/${item.slug}`} aria-label="Open clip"><ExternalLink className="size-4" /></Link><button className="button-secondary px-3 text-red-600" disabled={deleting === item.slug} onClick={() => remove(item.slug)} aria-label="Delete clip"><Trash2 className="size-4" /></button></div></li>;
+    return <li key={item.id} className="flex flex-col gap-4 p-5 transition hover:bg-black/[.02] dark:hover:bg-white/[.025] sm:flex-row sm:items-center"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><Link href={`/${item.slug}`} className="truncate text-lg font-bold hover:text-accent">/{item.slug}</Link><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${statusTone}`}>{status}</span>{item.deletionNoticeAt && <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">Deletion soon</span>}</div><p className="mt-1 text-xs text-ink/45">Created {new Date(item.createdAt).toLocaleDateString()}</p></div><div className="flex gap-2"><button className="button-secondary px-3" aria-label="Copy link" onClick={() => copyLink(item.slug)}>{copied === item.slug ? <Check className="size-4 text-emerald-600" /> : <Clipboard className="size-4" />}</button><Link className="button-secondary px-3" href={`/${item.slug}`} aria-label="Open clip"><ExternalLink className="size-4" /></Link><button className="button-secondary px-3 text-red-600" disabled={deleting === item.slug} onClick={() => remove(item.slug)} aria-label="Delete clip"><Trash2 className="size-4" /></button></div></li>;
   })}</ul></div>;
 }

@@ -34,6 +34,9 @@ export default async function ClipPage({ params }: Context) {
   const expiresAt = "expiresAt" in result.clip
     ? result.clip.expiresAt?.toISOString() ?? null
     : undefined;
-  const serialized = { ...result.clip, expiresAt };
+  const deletionNoticeAt = "deletionNoticeAt" in result.clip
+    ? result.clip.deletionNoticeAt?.toISOString() ?? null
+    : undefined;
+  const serialized = { ...result.clip, expiresAt, deletionNoticeAt };
   return <Viewer key={serialized.slug} access={result.access} clip={serialized} />;
 }

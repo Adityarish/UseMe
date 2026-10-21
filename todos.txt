@@ -1,4 +1,0 @@
-
-
-1. as i can see tha that multiple files are uploading one by one, i wanted to upload all this parallelly
-2. 

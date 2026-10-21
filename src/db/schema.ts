@@ -46,6 +46,7 @@ export const clips = pgTable(
     oneTimeConsumedAt: timestamp("one_time_consumed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    deletionNoticeAt: timestamp("deletion_notice_at", { withTimezone: true }),
     version: integer("version").default(1).notNull(),
     status: clipStatus("status").default("UPLOADING").notNull(),
   },

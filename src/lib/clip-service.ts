@@ -231,6 +231,7 @@ export async function publicClip(slug: string, cookieBag: CookieBag, identity: I
     clip: {
       id: clip.id, slug: clip.slug, text: clip.textContent, language: clip.language,
       expiryMode: clip.expiryMode, expiresAt: clip.expiresAt, version: clip.version, files,
+      deletionNoticeAt: clip.deletionNoticeAt,
       editAccess: identity?.userId === clip.ownerUserId || clip.editPolicy === "PUBLIC"
         || (clip.editPolicy === "PASSWORD" && verifyAccessToken(cookieBag.get(editCookieName(clip.id))?.value, clip.id, "edit"))
         ? "ALLOWED" as const
@@ -381,6 +382,7 @@ export async function ownedClips(userId: string, query = "", sort: "newest" | "o
   const items = await db.select({
     id: clips.id, slug: clips.slug, expiryMode: clips.expiryMode, expiresAt: clips.expiresAt,
     consumedAt: clips.oneTimeConsumedAt, status: clips.status, createdAt: clips.createdAt, updatedAt: clips.updatedAt,
+    deletionNoticeAt: clips.deletionNoticeAt,
   }).from(clips).where(where).orderBy(sort === "oldest" ? asc(clips.createdAt) : desc(clips.createdAt)).limit(pageSize).offset((page - 1) * pageSize);
   const countRows = await db.select({ count: sql<number>`count(*)::int` }).from(clips).where(where);
   const bytesRows = await db.select({ bytes: sql<number>`coalesce(sum(${attachments.sizeBytes}), 0)::bigint` })

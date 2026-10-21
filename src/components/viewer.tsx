@@ -13,7 +13,7 @@ const CodeEditor = dynamic(() => import("./code-editor").then((module) => module
 type FileItem = { id: string; name: string; size: number; mimeType: string };
 type ClipData = {
   id: string; slug: string; text: string | null; language: string; expiryMode: string;
-  expiresAt: string | null; version: number; files: FileItem[]; editAccess: "ALLOWED" | "PASSWORD" | "NONE";
+  expiresAt: string | null; deletionNoticeAt: string | null; version: number; files: FileItem[]; editAccess: "ALLOWED" | "PASSWORD" | "NONE";
 };
 
 function formatBytes(bytes: number) {
@@ -140,6 +140,7 @@ export function Viewer({ access, clip }: { access: "PASSWORD" | "REVEAL" | "AUTH
           <div><p className="eyebrow">Shared clip</p><h1 className="mt-2 break-all text-4xl font-black tracking-tight">/{full.slug}</h1><p className="mt-2 text-sm text-ink/50">{full.expiryMode === "FOREVER" ? "No expiration" : full.expiryMode === "ONCE" ? "One-time viewer session active" : `Expires ${formatExpiry(full.expiresAt!)}`}</p></div>
           <button className="button-secondary" onClick={() => copy(location.href)}>{copied ? <Check className="size-4" /> : <Clipboard className="size-4" />}{copied ? "Copied" : "Copy link"}</button>
         </div>
+        {full.deletionNoticeAt && <div className="mt-5 rounded-2xl border border-amber-500/25 bg-amber-500/10 p-4 text-sm text-amber-900 dark:text-amber-200"><strong>/{full.slug} is marked for deletion soon.</strong> An administrator has flagged this route; it has not been deleted yet.</div>}
         {(full.text !== null || editAccess === "ALLOWED") && <section className="card mt-8 p-5 sm:p-7">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2"><div><p className="eyebrow">{full.language}</p><h2 className="mt-1 text-xl font-bold">Shared text</h2></div><div className="flex gap-2">
             <button className="button-secondary px-3" onClick={() => copy(text)}><Clipboard className="size-4" />Copy</button>

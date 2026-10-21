@@ -64,6 +64,7 @@ export function HeaderAccount({ authEnabled }: { authEnabled: boolean }) {
 
   return <>
     {account.isAdmin && <Link href="/admin/reports" className="button-secondary relative px-3" aria-label={`${account.alertCount} open reports`}><Bell className="size-4" /><span className="hidden sm:inline">Alerts</span>{account.alertCount > 0 && <span className="grid min-w-5 place-items-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-black text-white">{account.alertCount > 99 ? "99+" : account.alertCount}</span>}</Link>}
+    {account.isAdmin && <Link href="/admin/cleanup" className="button-secondary px-3">Route cleanup</Link>}
     <Link href="/dashboard" className="button-secondary">Dashboard</Link>
     <SignOutButton />
   </>;

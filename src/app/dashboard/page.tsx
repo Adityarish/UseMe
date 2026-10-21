@@ -38,6 +38,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
     expiresAt: item.expiresAt?.toISOString() ?? null,
     consumedAt: item.consumedAt?.toISOString() ?? null,
     createdAt: item.createdAt.toISOString(),
+    deletionNoticeAt: item.deletionNoticeAt?.toISOString() ?? null,
   }));
 
   return (
