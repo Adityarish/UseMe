@@ -5,6 +5,13 @@ import { storage } from "@/lib/storage";
 
 type Context = { params: Promise<{ sessionId: string; attachmentId: string }> };
 const MAX_PROXY_CHUNK_BYTES = 4 * 1024 * 1024;
+const ALLOWED_DRIVE_UPLOAD_PARAMETERS = new Set([
+  "uploadType",
+  "upload_id",
+  "supportsAllDrives",
+  "fields",
+  "session_crd",
+]);
 
 function validateDriveUploadUrl(raw: string): URL {
   let url: URL;
@@ -19,10 +26,12 @@ function validateDriveUploadUrl(raw: string): URL {
     || url.password !== ""
     || url.hash !== ""
     || url.pathname !== "/upload/drive/v3/files"
+    || url.searchParams.getAll("uploadType").length !== 1
     || url.searchParams.get("uploadType") !== "resumable"
+    || url.searchParams.getAll("upload_id").length !== 1
     || !url.searchParams.get("upload_id")
-    || [...url.searchParams.keys()].length !== 2
-    || [...url.searchParams.keys()].some((key) => !["uploadType", "upload_id"].includes(key))
+    || [...url.searchParams.keys()].some((key) => !ALLOWED_DRIVE_UPLOAD_PARAMETERS.has(key))
+    || [...url.searchParams.keys()].some((key, index, keys) => keys.indexOf(key) !== index)
   ) {
     throw new ApiError(400, "The upload session is invalid.", "INVALID_UPLOAD_SESSION");
   }
