@@ -8,6 +8,7 @@ type UploadOptions = {
 type PreparedUpload =
   | { mode: "proxy" }
   | { mode: "direct"; uploadUrl: string; chunkSize: number };
+const APP_UPLOAD_CHUNK_BYTES = 4 * 1024 * 1024;
 
 function responseMessage(text: string, fallback: string): string {
   try {
@@ -36,7 +37,9 @@ function proxyUpload({ url, token, file, onProgress }: UploadOptions): Promise<v
   });
 }
 
-function uploadDriveChunk(
+function uploadChunkThroughApp(
+  appUrl: string,
+  token: string,
   uploadUrl: string,
   file: File,
   start: number,
@@ -45,27 +48,26 @@ function uploadDriveChunk(
 ): Promise<string | undefined> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    const finalChunk = end === file.size;
-    xhr.open("PUT", uploadUrl);
+    xhr.open("PUT", `${appUrl}/direct`);
+    xhr.setRequestHeader("x-upload-token", token);
+    xhr.setRequestHeader("x-drive-upload-url", uploadUrl);
+    xhr.setRequestHeader("x-drive-content-range", `bytes ${start}-${end - 1}/${file.size}`);
     xhr.setRequestHeader("content-type", file.type || "application/octet-stream");
-    xhr.setRequestHeader("content-range", `bytes ${start}-${end - 1}/${file.size}`);
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable) onProgress?.(Math.round((start + event.loaded) / file.size * 100));
     };
     xhr.onload = () => {
-      if (!finalChunk && xhr.status === 308) return resolve(undefined);
-      if (finalChunk && xhr.status >= 200 && xhr.status < 300) {
+      if (xhr.status >= 200 && xhr.status < 300) {
         try {
-          const result = JSON.parse(xhr.responseText) as { id?: string };
-          if (result.id) return resolve(result.id);
+          const result = JSON.parse(xhr.responseText) as { complete?: boolean; objectId?: string };
+          return resolve(result.complete ? result.objectId : undefined);
         } catch {
-          // The error below is intentionally generic; the upload URL is sensitive.
+          return reject(new Error("The upload service returned an invalid chunk response."));
         }
-        return reject(new Error("Google Drive completed the upload without returning a file ID."));
       }
-      reject(new Error(responseMessage(xhr.responseText, `Google Drive rejected an upload chunk (HTTP ${xhr.status}).`)));
+      reject(new Error(responseMessage(xhr.responseText, `The upload service rejected a chunk (HTTP ${xhr.status}).`)));
     };
-    xhr.onerror = () => reject(new Error("The connection to Google Drive failed during upload."));
+    xhr.onerror = () => reject(new Error("The connection to the upload service failed during upload."));
     xhr.send(file.slice(start, end));
   });
 }
@@ -79,9 +81,9 @@ async function directUpload(prepared: Extract<PreparedUpload, { mode: "direct" }
     throw new Error("The upload service returned an invalid destination.");
   }
   let objectId: string | undefined;
-  for (let start = 0; start < file.size; start += prepared.chunkSize) {
-    const end = Math.min(start + prepared.chunkSize, file.size);
-    objectId = await uploadDriveChunk(prepared.uploadUrl, file, start, end, onProgress) ?? objectId;
+  for (let start = 0; start < file.size; start += APP_UPLOAD_CHUNK_BYTES) {
+    const end = Math.min(start + APP_UPLOAD_CHUNK_BYTES, file.size);
+    objectId = await uploadChunkThroughApp(url, token, prepared.uploadUrl, file, start, end, onProgress) ?? objectId;
   }
   if (!objectId) throw new Error("Google Drive did not finish the upload.");
 
