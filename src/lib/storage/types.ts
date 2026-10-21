@@ -10,6 +10,22 @@ export interface StoredObject {
   objectId: string;
 }
 
+export interface DirectUploadInput {
+  clipId: string;
+  attachmentId: string;
+  size: number;
+  mimeType: string;
+}
+
+export interface DirectUploadTarget {
+  uploadUrl: string;
+  chunkSize: number;
+}
+
+export interface CompleteDirectUploadInput extends DirectUploadInput {
+  objectId: string;
+}
+
 export interface DownloadObject {
   body: ReadableStream<Uint8Array>;
   size?: number;
@@ -21,4 +37,6 @@ export interface StorageAdapter {
   get(objectId: string): Promise<DownloadObject>;
   delete(objectId: string): Promise<void>;
   deleteUncommitted(clipId: string, attachmentId: string): Promise<void>;
+  createDirectUpload?(input: DirectUploadInput): Promise<DirectUploadTarget>;
+  completeDirectUpload?(input: CompleteDirectUploadInput): Promise<StoredObject>;
 }

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Check, Clipboard, Download, Eye, FilePlus2, KeyRound, Pencil, Save, X } from "lucide-react";
+import { uploadAttachment } from "@/lib/client-upload";
 import { ReportButton } from "./report-button";
 
 const CodeEditor = dynamic(() => import("./code-editor").then((module) => module.CodeEditor), { ssr: false });
@@ -99,7 +100,11 @@ export function Viewer({ access, clip }: { access: "PASSWORD" | "REVEAL" | "AUTH
         nextVersion = reservation.version;
         setVersion(nextVersion);
         for (let index = 0; index < newFiles.length; index += 1) {
-          await uploadAttachment(`/api/uploads/${reservation.uploadSession.id}/${reservation.attachments[index].id}`, reservation.uploadSession.token, newFiles[index]);
+          await uploadAttachment({
+            url: `/api/uploads/${reservation.uploadSession.id}/${reservation.attachments[index].id}`,
+            token: reservation.uploadSession.token,
+            file: newFiles[index],
+          });
         }
         const finalized = await fetch(`/api/uploads/${reservation.uploadSession.id}/finalize`, { method: "POST", headers: { "x-upload-token": reservation.uploadSession.token } });
         if (!finalized.ok) {
@@ -111,23 +116,6 @@ export function Viewer({ access, clip }: { access: "PASSWORD" | "REVEAL" | "AUTH
       setVersion(nextVersion); setNewFiles([]); setEditing(false); router.refresh();
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not save changes."); }
     finally { setBusy(false); }
-  }
-  function uploadAttachment(url: string, token: string, file: File): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open("PUT", url); xhr.setRequestHeader("x-upload-token", token); xhr.setRequestHeader("content-type", file.type || "application/octet-stream");
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) return resolve();
-        try {
-          const result = JSON.parse(xhr.responseText) as { error?: { message?: string } };
-          reject(new Error(result.error?.message ?? `Could not upload ${file.name} (HTTP ${xhr.status}).`));
-        } catch {
-          reject(new Error(`Could not upload ${file.name} (HTTP ${xhr.status}).`));
-        }
-      };
-      xhr.onerror = () => reject(new Error(`Connection failed while uploading ${file.name}.`));
-      xhr.send(file);
-    });
   }
   async function removeExisting(file: FileItem) {
     if (!confirm(`Remove ${file.name}?`)) return;

@@ -28,7 +28,7 @@ describe("Google Drive storage", () => {
       new Response(JSON.stringify({ id: "storage-folder" }), { status: 200 }),
       new Response(JSON.stringify({ files: [] }), { status: 200 }),
       new Response(JSON.stringify({ id: "clip-folder" }), { status: 200 }),
-      new Response(null, { status: 200, headers: { location: "https://upload.example/session" } }),
+      new Response(null, { status: 200, headers: { location: "https://www.googleapis.com/upload/session" } }),
       new Response(JSON.stringify({ id: "drive-object" }), { status: 200 }),
     ];
     const fetchMock = vi.fn<typeof fetch>(async () => responses.shift() ?? new Response(null, { status: 500 }));
@@ -53,6 +53,46 @@ describe("Google Drive storage", () => {
     expect(storageFolderBody.parents).toEqual(["root-folder"]);
     expect(JSON.parse(String(calls[4][1]?.body))).toMatchObject({ name: "demo-clip", parents: ["storage-folder"] });
     expect(String(calls[5][0])).toContain("uploadType=resumable");
-    expect(calls[6][0]).toBe("https://upload.example/session");
+    expect(calls[6][0]).toBe("https://www.googleapis.com/upload/session");
+  });
+
+  it("creates a browser upload session and verifies the completed Drive object", async () => {
+    const pdf = Uint8Array.from([0x25, 0x50, 0x44, 0x46]);
+    const responses = [
+      new Response(JSON.stringify({ access_token: "access-token" }), { status: 200 }),
+      new Response(JSON.stringify({ files: [{ id: "storage-folder" }] }), { status: 200 }),
+      new Response(JSON.stringify({ files: [{ id: "clip-folder" }] }), { status: 200 }),
+      new Response(null, { status: 200, headers: { location: "https://www.googleapis.com/upload/session" } }),
+      new Response(JSON.stringify({ access_token: "access-token" }), { status: 200 }),
+      new Response(JSON.stringify({
+        id: "drive-object",
+        name: "demo-attachment",
+        size: String(pdf.byteLength),
+        mimeType: "application/pdf",
+        trashed: false,
+        appProperties: { clipId: "demo-clip", attachmentId: "demo-attachment" },
+      }), { status: 200 }),
+      new Response(pdf, { status: 206 }),
+    ];
+    const fetchMock = vi.fn<typeof fetch>(async () => responses.shift() ?? new Response(null, { status: 500 }));
+    global.fetch = fetchMock as typeof fetch;
+
+    const { GoogleDriveStorageAdapter } = await import("@/lib/storage/google-drive");
+    const adapter = new GoogleDriveStorageAdapter();
+    const input = {
+      clipId: "demo-clip",
+      attachmentId: "demo-attachment",
+      size: pdf.byteLength,
+      mimeType: "application/pdf",
+    };
+    const prepared = await adapter.createDirectUpload(input);
+    const completed = await adapter.completeDirectUpload({ ...input, objectId: "drive-object" });
+
+    expect(prepared).toEqual({ uploadUrl: "https://www.googleapis.com/upload/session", chunkSize: 8 * 1024 * 1024 });
+    expect(completed).toEqual({ objectId: "drive-object" });
+    expect(fetchMock).toHaveBeenCalledTimes(7);
+    const calls = fetchMock.mock.calls as [URL | RequestInfo, RequestInit?][];
+    expect(calls[5][0]).toContain("fields=id,name,size,mimeType,trashed,appProperties");
+    expect(calls[6][1]?.headers).toMatchObject({ range: "bytes=0-15" });
   });
 });

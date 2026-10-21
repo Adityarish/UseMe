@@ -13,7 +13,7 @@ const nextConfig: NextConfig = {
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
       "font-src 'self'",
-      `connect-src 'self' ${supabaseOrigin}`.trim(),
+      `connect-src 'self' ${supabaseOrigin} https://www.googleapis.com`.trim(),
       "frame-src 'none'",
       "object-src 'none'",
       "base-uri 'self'",

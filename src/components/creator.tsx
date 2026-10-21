@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import { FileUp, LockKeyhole, Trash2 } from "lucide-react";
+import { uploadAttachment } from "@/lib/client-upload";
 import { PasswordField } from "./password-field";
 
 const CodeEditor = dynamic(() => import("./code-editor").then((module) => module.CodeEditor), { ssr: false });
@@ -48,27 +49,6 @@ export function Creator({ initialSlug, maxClipBytes, maxFiles }: { initialSlug: 
     setError(""); setFiles(next);
   }
 
-  function upload(url: string, token: string, file: File): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open("PUT", url);
-      xhr.setRequestHeader("x-upload-token", token);
-      xhr.setRequestHeader("content-type", file.type || "application/octet-stream");
-      xhr.upload.onprogress = (event) => setProgress((current) => ({ ...current, [file.name]: event.lengthComputable ? Math.round(event.loaded / event.total * 100) : 0 }));
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) return resolve();
-        try {
-          const result = JSON.parse(xhr.responseText) as { error?: { message?: string } };
-          reject(new Error(result.error?.message ?? `A file could not be uploaded (HTTP ${xhr.status}).`));
-        } catch {
-          reject(new Error(`A file could not be uploaded (HTTP ${xhr.status}).`));
-        }
-      };
-      xhr.onerror = () => reject(new Error("The upload connection failed."));
-      xhr.send(file);
-    });
-  }
-
   async function publish(event: React.FormEvent) {
     event.preventDefault();
     setError("");
@@ -93,7 +73,13 @@ export function Creator({ initialSlug, maxClipBytes, maxFiles }: { initialSlug: 
       createdSlug = result.clip.slug as string;
       if (result.uploadSession) {
         for (let index = 0; index < files.length; index += 1) {
-          await upload(`/api/uploads/${result.uploadSession.id}/${result.attachments[index].id}`, result.uploadSession.token, files[index]);
+          const file = files[index];
+          await uploadAttachment({
+            url: `/api/uploads/${result.uploadSession.id}/${result.attachments[index].id}`,
+            token: result.uploadSession.token,
+            file,
+            onProgress: (percent) => setProgress((current) => ({ ...current, [file.name]: percent })),
+          });
         }
         const finalized = await fetch(`/api/uploads/${result.uploadSession.id}/finalize`, {
           method: "POST", headers: { "x-upload-token": result.uploadSession.token },

@@ -5,6 +5,13 @@ const signatures: Array<{ mime: string; bytes: number[] }> = [
   { mime: "application/zip", bytes: [0x50, 0x4b] },
 ];
 
+export function validateUploadPrefix(prefix: Uint8Array, declaredMime: string): void {
+  const signature = signatures.find((entry) => entry.mime === declaredMime);
+  if (signature && !signature.bytes.every((byte, index) => prefix[index] === byte)) {
+    throw new Error("File content does not match its declared type");
+  }
+}
+
 export function validatedUploadStream(source: ReadableStream<Uint8Array>, expectedSize: number, declaredMime: string): ReadableStream<Uint8Array> {
   let bytesRead = 0;
   let prefix = new Uint8Array();
@@ -21,10 +28,7 @@ export function validatedUploadStream(source: ReadableStream<Uint8Array>, expect
         combined.set(take, prefix.length);
         prefix = combined;
         if (prefix.length >= 4 || bytesRead === expectedSize) {
-          const signature = signatures.find((entry) => entry.mime === declaredMime);
-          if (signature && !signature.bytes.every((byte, index) => prefix[index] === byte)) {
-            throw new Error("File content does not match its declared type");
-          }
+          validateUploadPrefix(prefix, declaredMime);
           checked = true;
         }
       }

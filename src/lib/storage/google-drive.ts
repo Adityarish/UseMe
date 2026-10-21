@@ -1,8 +1,24 @@
-import type { DownloadObject, PutObjectInput, StorageAdapter, StoredObject } from "./types";
+import { validateUploadPrefix } from "../upload-stream";
+import type {
+  CompleteDirectUploadInput,
+  DirectUploadInput,
+  DirectUploadTarget,
+  DownloadObject,
+  PutObjectInput,
+  StorageAdapter,
+  StoredObject,
+} from "./types";
 import { env } from "../env";
 import { googleDriveFolderId, storageFolderFor } from "./shard";
 
 type DriveFile = { id: string };
+type DriveFileMetadata = DriveFile & {
+  name?: string;
+  size?: string;
+  mimeType?: string;
+  trashed?: boolean;
+  appProperties?: Record<string, string>;
+};
 const DRIVE_CHUNK_BYTES = 8 * 1024 * 1024;
 
 async function driveError(action: string, response: Response): Promise<Error> {
@@ -87,7 +103,7 @@ export class GoogleDriveStorageAdapter implements StorageAdapter {
     return ((await created.json()) as DriveFile).id;
   }
 
-  async put(input: PutObjectInput): Promise<StoredObject> {
+  private async initiateUpload(input: DirectUploadInput): Promise<string> {
     const config = env();
     const token = await this.accessToken();
     const rootFolderId = googleDriveFolderId(config.GOOGLE_DRIVE_ROOT_FOLDER_ID!);
@@ -101,11 +117,62 @@ export class GoogleDriveStorageAdapter implements StorageAdapter {
         "x-upload-content-type": input.mimeType,
         "x-upload-content-length": String(input.size),
       },
-      body: JSON.stringify({ name: input.attachmentId, parents: [clipFolder], appProperties: { clipId: input.clipId, attachmentId: input.attachmentId } }),
+      body: JSON.stringify({
+        name: input.attachmentId,
+        mimeType: input.mimeType,
+        parents: [clipFolder],
+        appProperties: { clipId: input.clipId, attachmentId: input.attachmentId },
+      }),
     });
     const location = initiate.headers.get("location");
     if (!initiate.ok) throw await driveError("Google Drive resumable upload initiation", initiate);
     if (!location) throw new Error("Google Drive resumable upload initiation returned no upload URL");
+    if (new URL(location).origin !== "https://www.googleapis.com") {
+      throw new Error("Google Drive returned an unexpected upload URL");
+    }
+    return location;
+  }
+
+  async createDirectUpload(input: DirectUploadInput): Promise<DirectUploadTarget> {
+    return { uploadUrl: await this.initiateUpload(input), chunkSize: DRIVE_CHUNK_BYTES };
+  }
+
+  async completeDirectUpload(input: CompleteDirectUploadInput): Promise<StoredObject> {
+    const token = await this.accessToken();
+    const metadataResponse = await retryableFetch(
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(input.objectId)}?fields=id,name,size,mimeType,trashed,appProperties&supportsAllDrives=true`,
+      { headers: { authorization: `Bearer ${token}` }, cache: "no-store" },
+    );
+    if (!metadataResponse.ok) throw await driveError("Google Drive upload verification", metadataResponse);
+    const metadata = await metadataResponse.json() as DriveFileMetadata;
+    const belongsToUpload = metadata.id === input.objectId
+      && metadata.name === input.attachmentId
+      && metadata.appProperties?.clipId === input.clipId
+      && metadata.appProperties?.attachmentId === input.attachmentId;
+    const matchesReservation = Number(metadata.size) === input.size
+      && metadata.mimeType === input.mimeType
+      && metadata.trashed !== true;
+    if (!belongsToUpload || !matchesReservation) {
+      if (belongsToUpload) await this.delete(input.objectId).catch(() => undefined);
+      throw new Error("Google Drive upload does not match its reservation");
+    }
+
+    const prefixResponse = await retryableFetch(
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(input.objectId)}?alt=media&supportsAllDrives=true`,
+      { headers: { authorization: `Bearer ${token}`, range: "bytes=0-15" }, cache: "no-store" },
+    );
+    if (!prefixResponse.ok) throw await driveError("Google Drive upload content verification", prefixResponse);
+    try {
+      validateUploadPrefix(new Uint8Array(await prefixResponse.arrayBuffer()), input.mimeType);
+    } catch (error) {
+      await this.delete(input.objectId).catch(() => undefined);
+      throw error;
+    }
+    return { objectId: input.objectId };
+  }
+
+  async put(input: PutObjectInput): Promise<StoredObject> {
+    const location = await this.initiateUpload(input);
     let offset = 0;
     let uploaded: Response | undefined;
     for await (const chunk of fixedChunks(input.body, DRIVE_CHUNK_BYTES)) {
